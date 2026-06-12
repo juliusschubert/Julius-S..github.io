@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>4 Gewinnt — PIXELBOX</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#0D0F1A;color:#F0F2FF;font-family:'Space Mono',monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100dvh;overflow:hidden;user-select:none;}
+  #wrapper{width:min(96vw,400px);display:flex;flex-direction:column;align-items:center;gap:10px;}
+  #scores{display:flex;gap:16px;align-items:center;}
+  .sc{display:flex;flex-direction:column;align-items:center;gap:3px;}
+  .sc-name{font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;}
+  .sc-val{font-size:24px;font-weight:700;}
+  .sc-sep{font-size:20px;color:#2A2F55;}
+  #status{font-size:14px;font-weight:700;letter-spacing:.06em;text-align:center;min-height:22px;}
+  #col-arrows{display:flex;width:100%;padding:0 2px;}
+  .arrow-btn{flex:1;padding:8px 0;background:transparent;border:none;font-size:18px;cursor:pointer;-webkit-tap-highlight-color:transparent;opacity:.5;transition:opacity .15s;color:#F0F2FF;}
+  .arrow-btn:hover,.arrow-btn:active{opacity:1;}
+  canvas{display:block;border-radius:6px;width:100%;}
+  #btn-row{display:flex;gap:10px;}
+  #new-btn{padding:12px 28px;background:transparent;border:2px solid #F0F2FF;color:#F0F2FF;font-family:'Space Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.1em;cursor:pointer;border-radius:3px;-webkit-tap-highlight-color:transparent;}
+  #new-btn:active{background:#F0F2FF;color:#0D0F1A;}
+  #overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(13,15,26,.92);backdrop-filter:blur(4px);z-index:10;transition:opacity .3s;}
+  #overlay.hidden{opacity:0;pointer-events:none;}
+  .ov-title{font-size:34px;font-weight:700;letter-spacing:.06em;}
+  .ov-sub{font-size:12px;color:#C0C4E0;text-align:center;line-height:1.8;}
+  #start-btn{padding:14px 44px;background:transparent;border:2px solid #F0F2FF;color:#F0F2FF;font-family:'Space Mono',monospace;font-size:15px;letter-spacing:.12em;cursor:pointer;border-radius:3px;font-weight:700;-webkit-tap-highlight-color:transparent;}
+  #start-btn:active{background:#F0F2FF;color:#0D0F1A;}
+</style>
+</head>
+<body>
+<div id="wrapper">
+  <div id="scores">
+    <div class="sc">
+      <div class="sc-name" style="color:#00E5FF">Spieler 1</div>
+      <div class="sc-val" style="color:#00E5FF" id="sc1">0</div>
+    </div>
+    <div class="sc-sep">|</div>
+    <div class="sc">
+      <div class="sc-name" style="color:#888">Unentsch.</div>
+      <div class="sc-val" style="color:#888" id="sc-draw">0</div>
+    </div>
+    <div class="sc-sep">|</div>
+    <div class="sc">
+      <div class="sc-name" style="color:#FF6B35">Spieler 2</div>
+      <div class="sc-val" style="color:#FF6B35" id="sc2">0</div>
+    </div>
+  </div>
+  <div id="status"></div>
+  <div id="col-arrows"></div>
+  <canvas id="c"></canvas>
+  <div id="btn-row"><button id="new-btn">NEUES SPIEL</button></div>
+</div>
+<div id="overlay">
+  <div class="ov-title"><span style="color:#00E5FF">4</span> GEWINNT</div>
+  <div class="ov-sub"><span style="color:#00E5FF">● Spieler 1</span> vs <span style="color:#FF6B35">● Spieler 2</span><br>Tippe auf eine Spalte · 4 in einer Reihe!</div>
+  <button id="start-btn">START</button>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('start-btn');
+const statusEl = document.getElementById('status');
+const sc1El = document.getElementById('sc1');
+const sc2El = document.getElementById('sc2');
+const scDrawEl = document.getElementById('sc-draw');
+const colArrows = document.getElementById('col-arrows');
+const newBtn = document.getElementById('new-btn');
+
+const COLS = 7, ROWS = 6;
+const P_COLORS = ['#00E5FF', '#FF6B35'];
+let board, current, gameActive, scores = {p1:0, p2:0, draw:0}, CELL, winCells, animating;
+
+function resize() {
+  const w = Math.min(window.innerWidth * .96, 400);
+  CELL = Math.floor(w / COLS);
+  canvas.width = CELL * COLS; canvas.height = CELL * ROWS;
+}
+resize(); window.addEventListener('resize', () => { resize(); if (board) draw(); });
+
+function buildArrows() {
+  colArrows.innerHTML = '';
+  for (let c = 0; c < COLS; c++) {
+    const btn = document.createElement('button');
+    btn.className = 'arrow-btn'; btn.textContent = '▼'; btn.dataset.col = c;
+    btn.addEventListener('click', () => drop(c));
+    colArrows.appendChild(btn);
+  }
+}
+
+function initBoard() {
+  board = Array.from({length:ROWS}, () => Array(COLS).fill(0));
+  current = 1; gameActive = true; winCells = null; animating = false;
+  setStatus(); draw();
+}
+
+function setStatus() {
+  statusEl.style.color = P_COLORS[current - 1];
+  statusEl.textContent = `Spieler ${current} ist dran`;
+}
+
+function drop(col) {
+  if (!gameActive || animating) return;
+  for (let r = ROWS - 1; r >= 0; r--) {
+    if (!board[r][col]) {
+      animating = true;
+      animateDrop(r, col, current, () => {
+        board[r][col] = current;
+        const win = checkWin(r, col, current);
+        if (win) {
+          winCells = win; gameActive = false;
+          statusEl.style.color = P_COLORS[current - 1];
+          statusEl.textContent = `🏆 Spieler ${current} gewinnt! — Nochmal tippen`;
+          if (current === 1) { scores.p1++; sc1El.textContent = scores.p1; }
+          else { scores.p2++; sc2El.textContent = scores.p2; }
+          draw();
+          canvas.addEventListener('click', initBoard, { once: true });
+          return;
+        }
+        if (board[0].every(c => c)) {
+          gameActive = false;
+          statusEl.style.color = '#C0C4E0';
+          statusEl.textContent = 'Unentschieden! — Nochmal tippen';
+          scores.draw++; scDrawEl.textContent = scores.draw;
+          canvas.addEventListener('click', initBoard, { once: true });
+        } else {
+          current = current === 1 ? 2 : 1;
+          setStatus();
+        }
+        draw(); animating = false;
+      });
+      return;
+    }
+  }
+}
+
+function animateDrop(finalR, col, player, cb) {
+  let r = 0;
+  const iv = setInterval(() => {
+    // Clear previous temp
+    if (r > 0) board[r-1][col] = 0;
+    board[r][col] = player;
+    draw();
+    if (r >= finalR) { clearInterval(iv); board[r][col] = 0; cb(); }
+    else r++;
+  }, 28);
+}
+
+function checkWin(r, c, p) {
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (const [dr, dc] of dirs) {
+    const cells = [[r, c]];
+    for (let d = 1; d < 4; d++) { const nr=r+dr*d,nc=c+dc*d; if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&board[nr][nc]===p)cells.push([nr,nc]);else break; }
+    for (let d = 1; d < 4; d++) { const nr=r-dr*d,nc=c-dc*d; if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&board[nr][nc]===p)cells.push([nr,nc]);else break; }
+    if (cells.length >= 4) return cells;
+  }
+  return null;
+}
+
+function draw() {
+  ctx.fillStyle = '#0A0C18'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const isWin = winCells && winCells.some(([wr,wc]) => wr===r && wc===c);
+    const v = board[r][c];
+    ctx.fillStyle = '#12152A';
+    ctx.beginPath(); ctx.arc(c*CELL+CELL/2, r*CELL+CELL/2, CELL*.38, 0, Math.PI*2); ctx.fill();
+    if (v) {
+      const col = P_COLORS[v-1];
+      ctx.shadowColor = col; ctx.shadowBlur = isWin ? 22 : 9;
+      ctx.fillStyle = isWin ? '#ffffff' : col;
+      ctx.beginPath(); ctx.arc(c*CELL+CELL/2, r*CELL+CELL/2, CELL*.35, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+}
+
+canvas.addEventListener('click', e => {
+  if (!gameActive || animating) return;
+  const rect = canvas.getBoundingClientRect();
+  drop(Math.floor((e.clientX - rect.left) * (canvas.width / rect.width) / CELL));
+});
+canvas.addEventListener('touchend', e => {
+  if (!gameActive || animating) return;
+  const rect = canvas.getBoundingClientRect();
+  drop(Math.floor((e.changedTouches[0].clientX - rect.left) * (canvas.width / rect.width) / CELL));
+});
+
+startBtn.addEventListener('click', () => { overlay.classList.add('hidden'); buildArrows(); initBoard(); });
+newBtn.addEventListener('click', initBoard);
+</script>
+</body>
+</html>
