@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>PIXELBOX — Mini Games</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;700&family=Space+Mono:wght@400;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#0D0F1A;color:#F0F2FF;font-family:'Space Grotesk',sans-serif;min-height:100dvh;overflow-x:hidden;}
+  header{padding:28px 20px 10px;text-align:center;}
+  .logo{font-family:'Space Mono',monospace;font-size:clamp(28px,8vw,48px);font-weight:700;letter-spacing:.1em;color:#F0F2FF;}
+  .logo span{color:#00E5FF;text-shadow:0 0 20px rgba(0,229,255,.6);}
+  .tagline{font-size:12px;letter-spacing:.15em;color:#C0C4E0;margin-top:6px;text-transform:uppercase;font-family:'Space Mono',monospace;}
+  .section-title{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.2em;color:#C0C4E0;text-transform:uppercase;padding:14px 18px 6px;opacity:.9;}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:0 14px 14px;max-width:480px;margin:0 auto;}
+  .card{background:#12152A;border-radius:10px;padding:18px 14px;display:flex;flex-direction:column;gap:8px;cursor:pointer;text-decoration:none;color:inherit;border:1px solid rgba(255,255,255,.07);transition:transform .15s,box-shadow .15s,border-color .2s;-webkit-tap-highlight-color:transparent;position:relative;overflow:hidden;}
+  .card:active{transform:scale(.97);}
+  .card:hover,.card:active{box-shadow:0 4px 24px var(--glow);border-color:var(--accent);}
+  .card-icon{font-size:34px;line-height:1;}
+  .card-title{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;letter-spacing:.06em;color:var(--accent);}
+  .card-desc{font-size:11px;color:#C0C4E0;line-height:1.4;}
+  .card-badge{position:absolute;top:10px;right:10px;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.08em;padding:3px 7px;border-radius:20px;font-weight:700;text-transform:uppercase;}
+  .badge-solo{background:rgba(0,229,255,.12);color:#00E5FF;}
+  .badge-multi{background:rgba(255,209,102,.12);color:#FFD166;}
+  .badge-new{background:rgba(57,255,20,.14);color:#39FF14;}
+  footer{text-align:center;padding:20px;font-size:11px;color:#C0C4E0;opacity:.4;letter-spacing:.08em;font-family:'Space Mono',monospace;}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">PIXEL<span>BOX</span></div>
+  <div class="tagline">18 Games · Free to Play</div>
+</header>
+
+<div class="section-title">Solo Games</div>
+<div class="grid">
+  <a class="card" href="endless-runner.html" style="--accent:#00E5FF;--glow:rgba(0,229,255,.18)">
+    <div class="card-icon">🏃</div>
+    <div class="card-title">DASH</div>
+    <div class="card-desc">Endless Runner mit Hindernissen & Münzen</div>
+    <div class="card-badge badge-solo">Solo</div>
+  </a>
+  <a class="card" href="snake.html" style="--accent:#39FF14;--glow:rgba(57,255,20,.18)">
+    <div class="card-icon">🐍</div>
+    <div class="card-title">SNAKE</div>
+    <div class="card-desc">Klassisches Snake — wie groß wirst du?</div>
+    <div class="card-badge badge-solo">Solo</div>
+  </a>
+  <a class="card" href="flappy.html" style="--accent:#FF6B35;--glow:rgba(255,107,53,.18)">
+    <div class="card-icon">🐦</div>
+    <div class="card-title">FLAPPY</div>
+    <div class="card-desc">Flieg durch die Rohre — so lang du kannst</div>
+    <div class="card-badge badge-solo">Solo</div>
+  </a>
+  <a class="card" href="bricks.html" style="--accent:#00E5FF;--glow:rgba(0,229,255,.18)">
+    <div class="card-icon">🧱</div>
+    <div class="card-title">BRICKS</div>
+    <div class="card-desc">Multi-Ball Brick Breaker mit Speed-Up</div>
+    <div class="card-badge badge-solo">Solo</div>
+  </a>
+  <a class="card" href="tetris.html" style="--accent:#A855F7;--glow:rgba(168,85,247,.18)">
+    <div class="card-icon">🟦</div>
+    <div class="card-title">TETRIS</div>
+    <div class="card-desc">Blöcke stapeln & Reihen löschen</div>
+    <div class="card-badge badge-solo">Solo</div>
+  </a>
+  <a class="card" href="reaction.html" style="--accent:#FFD166;--glow:rgba(255,209,102,.18)">
+    <div class="card-icon">⚡</div>
+    <div class="card-title">REACTION</div>
+    <div class="card-desc">Wie schnell reagierst du? Teste dich!</div>
+    <div class="card-badge badge-solo">Solo</div>
+  </a>
+  <a class="card" href="fruitmerge.html" style="--accent:#39FF14;--glow:rgba(57,255,20,.18)">
+    <div class="card-icon">🍉</div>
+    <div class="card-title">FRUIT MERGE</div>
+    <div class="card-desc">Früchte droppen & verschmelzen lassen</div>
+    <div class="card-badge badge-solo">Solo</div>
+  </a>
+  <a class="card" href="stack.html" style="--accent:#A855F7;--glow:rgba(168,85,247,.18)">
+    <div class="card-icon">🗼</div>
+    <div class="card-title">STACK</div>
+    <div class="card-desc">Stapel Blöcke so präzise wie möglich</div>
+    <div class="card-badge badge-new">Neu</div>
+  </a>
+  <a class="card" href="jumper.html" style="--accent:#39FF14;--glow:rgba(57,255,20,.18)">
+    <div class="card-icon">🟢</div>
+    <div class="card-title">JUMPER</div>
+    <div class="card-desc">Spring von Plattform zu Plattform, so hoch du kannst</div>
+    <div class="card-badge badge-new">Neu</div>
+  </a>
+  <a class="card" href="wordle.html" style="--accent:#00E5FF;--glow:rgba(0,229,255,.18)">
+    <div class="card-icon">🔤</div>
+    <div class="card-title">WORD QUEST</div>
+    <div class="card-desc">Errate das 5-Buchstaben-Wort in 6 Versuchen</div>
+    <div class="card-badge badge-new">Neu</div>
+  </a>
+  <a class="card" href="whackmole.html" style="--accent:#FF6B35;--glow:rgba(255,107,53,.18)">
+    <div class="card-icon">🔨</div>
+    <div class="card-title">WHACK!</div>
+    <div class="card-desc">60 Sekunden — triff so viele Maulwürfe wie möglich</div>
+    <div class="card-badge badge-new">Neu</div>
+  </a>
+</div>
+
+<div class="section-title">Multiplayer Games</div>
+<div class="grid">
+  <a class="card" href="2048.html" style="--accent:#FFD166;--glow:rgba(255,209,102,.18)">
+    <div class="card-icon">🔢</div>
+    <div class="card-title">2048</div>
+    <div class="card-desc">Schiebe & merge bis zur Zielkachel</div>
+    <div class="card-badge badge-multi">1–2P</div>
+  </a>
+  <a class="card" href="memory.html" style="--accent:#A855F7;--glow:rgba(168,85,247,.18)">
+    <div class="card-icon">🃏</div>
+    <div class="card-title">MEMORY</div>
+    <div class="card-desc">Finde alle Paare — solo oder bis 4P</div>
+    <div class="card-badge badge-multi">1–4P</div>
+  </a>
+  <a class="card" href="pong.html" style="--accent:#F0F2FF;--glow:rgba(240,242,255,.12)">
+    <div class="card-icon">🏓</div>
+    <div class="card-title">PONG</div>
+    <div class="card-desc">Klassischer Pong — vs Computer oder 2P</div>
+    <div class="card-badge badge-multi">1–2P</div>
+  </a>
+  <a class="card" href="airhockey.html" style="--accent:#FF6B35;--glow:rgba(255,107,53,.18)">
+    <div class="card-icon">🏒</div>
+    <div class="card-title">AIR HOCKEY</div>
+    <div class="card-desc">Schnelles Tisch-Hockey — vs Computer oder 2P</div>
+    <div class="card-badge badge-new">Neu</div>
+  </a>
+  <a class="card" href="tictactoe.html" style="--accent:#00E5FF;--glow:rgba(0,229,255,.18)">
+    <div class="card-icon">✕</div>
+    <div class="card-title">TIC TAC TOE</div>
+    <div class="card-desc">3 in einer Reihe gewinnt</div>
+    <div class="card-badge badge-multi">2P</div>
+  </a>
+  <a class="card" href="connect4.html" style="--accent:#FF6B35;--glow:rgba(255,107,53,.18)">
+    <div class="card-icon">🔴</div>
+    <div class="card-title">4 GEWINNT</div>
+    <div class="card-desc">Wirf Chips ein · 4 in einer Reihe!</div>
+    <div class="card-badge badge-multi">2P</div>
+  </a>
+  <a class="card" href="quiz.html" style="--accent:#A855F7;--glow:rgba(168,85,247,.18)">
+    <div class="card-icon">🧠</div>
+    <div class="card-title">QUIZ BATTLE</div>
+    <div class="card-desc">100+ Fragen · reihum · wer weiß mehr?</div>
+    <div class="card-badge badge-multi">2–4P</div>
+  </a>
+</div>
+
+<footer>PIXELBOX · Made with Claude</footer>
+</body>
+</html>
