@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Flappy — PIXELBOX</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#0D0F1A;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100dvh;overflow:hidden;touch-action:none;user-select:none;font-family:'Space Mono',monospace;}
+  #wrapper{width:min(100vw,420px);display:flex;flex-direction:column;align-items:center;gap:10px;}
+  #hud{width:100%;display:flex;justify-content:space-between;padding:0 4px;}
+  .hud-label{font-size:10px;letter-spacing:.15em;color:#FF6B35;font-weight:700;text-transform:uppercase;}
+  .hud-value{font-size:22px;font-weight:700;color:#F0F2FF;line-height:1;}
+  canvas{display:block;border-radius:4px;width:100%;touch-action:none;}
+  #diff-row{display:flex;gap:8px;}
+  .diff-btn{padding:10px 20px;background:transparent;font-size:12px;cursor:pointer;border-radius:3px;font-family:'Space Mono',monospace;font-weight:700;-webkit-tap-highlight-color:transparent;}
+  .diff-btn.easy{border:2px solid #39FF14;color:#39FF14;}
+  .diff-btn.normal{border:2px solid #FFD166;color:#FFD166;}
+  .diff-btn.hard{border:2px solid #FF6B35;color:#FF6B35;}
+  .diff-btn.selected.easy{background:#39FF14;color:#0D0F1A;}
+  .diff-btn.selected.normal{background:#FFD166;color:#0D0F1A;}
+  .diff-btn.selected.hard{background:#FF6B35;color:#0D0F1A;}
+</style>
+</head>
+<body>
+<div id="wrapper">
+  <div id="hud">
+    <div><div class="hud-label">Score</div><div class="hud-value" id="score-el">0</div></div>
+    <div style="text-align:center"><div class="hud-label">Phase</div><div class="hud-value" id="phase-el" style="color:#FF6B35">1</div></div>
+    <div style="text-align:right"><div class="hud-label">Best</div><div class="hud-value" id="best-el">0</div></div>
+  </div>
+  <canvas id="c"></canvas>
+  <!-- Difficulty row always visible below canvas -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:4px 0;">
+    <div style="font-size:10px;letter-spacing:.15em;color:#C0C4E0;text-transform:uppercase;font-weight:700;">Schwierigkeit</div>
+    <div id="diff-row">
+      <button class="diff-btn easy selected" data-diff="easy">EASY</button>
+      <button class="diff-btn normal" data-diff="normal">NORMAL</button>
+      <button class="diff-btn hard" data-diff="hard">HARD</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score-el');
+const bestEl = document.getElementById('best-el');
+const phaseEl = document.getElementById('phase-el');
+
+// --- Difficulty ---
+const DIFF = {
+  easy:   { gapRatio:.34, gravMul:.78, flapStr:.017, speedBase:.0032, speedInc:.00004 },
+  normal: { gapRatio:.27, gravMul:1.0, flapStr:.019, speedBase:.005,  speedInc:.00008 },
+  hard:   { gapRatio:.20, gravMul:1.2, flapStr:.020, speedBase:.006,  speedInc:.00014 },
+};
+let selectedDiff = 'easy';
+document.querySelectorAll('.diff-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedDiff = btn.dataset.diff;
+    bestEl.textContent = getBest();
+    // Restart with new diff if already dead
+    if (!running) showStart();
+  });
+});
+
+function resize() {
+  const w = Math.min(window.innerWidth, 420);
+  canvas.width = w; canvas.height = Math.round(w * 1.15);
+}
+resize();
+window.addEventListener('resize', resize);
+
+function getBest() { return parseInt(localStorage.getItem('pb_flappy_' + selectedDiff) || '0'); }
+function setBest(v) { localStorage.setItem('pb_flappy_' + selectedDiff, v); }
+
+// --- State ---
+let bird, pipes, score, running, raf, frame, phase, pipesPassed, state;
+// state: 'start' | 'playing' | 'dead'
+
+function showStart() {
+  state = 'start';
+  running = false;
+  drawStartScreen();
+}
+
+function startGame() {
+  const W = canvas.width, H = canvas.height;
+  bird = { x: W*.22, y: H*.42, vy: 0, r: W*.042 };
+  pipes = []; score = 0; frame = 0; phase = 1; pipesPassed = 0;
+  scoreEl.textContent = '0'; phaseEl.textContent = '1';
+  state = 'playing'; running = true;
+  if (raf) cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(loop);
+}
+
+function flap() {
+  if (state === 'start') { startGame(); return; }
+  if (state === 'dead') { showStart(); return; }
+  if (state === 'playing') {
+    bird.vy = -canvas.height * DIFF[selectedDiff].flapStr;
+  }
+}
+
+// Input — all on the wrapper/document level so overlay buttons don't interfere
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); flap(); }
+});
+canvas.addEventListener('pointerdown', e => { e.preventDefault(); flap(); });
+
+function loop() {
+  if (!running) return;
+  update();
+  draw();
+  raf = requestAnimationFrame(loop);
+}
+
+function update() {
+  const W = canvas.width, H = canvas.height;
+  const cfg = DIFF[selectedDiff];
+  frame++;
+
+  const newPhase = 1 + Math.floor(pipesPassed / 8);
+  if (newPhase !== phase) { phase = newPhase; phaseEl.textContent = phase; }
+
+  bird.vy += H * 0.00118 * cfg.gravMul;
+  bird.y  += bird.vy;
+
+  const pipeW = W * .11;
+  const gap   = Math.max(H * (cfg.gapRatio - pipesPassed * .0018), H * .16);
+  const speed = W * (cfg.speedBase + frame * cfg.speedInc);
+
+  const spawnEvery = Math.max(108 - Math.floor(pipesPassed / 6) * 5, 54);
+  if (frame % spawnEvery === 0) {
+    const minH = H * .1, maxH = H - gap - H * .1;
+    pipes.push({ x: W + pipeW, topH: minH + Math.random() * (maxH - minH), scored: false });
+  }
+
+  for (let i = pipes.length - 1; i >= 0; i--) {
+    pipes[i].x -= speed;
+    const p = pipes[i];
+    if (!p.scored && p.x + pipeW < bird.x) {
+      p.scored = true; score++; pipesPassed++;
+      scoreEl.textContent = score;
+      if (score > getBest()) setBest(score);
+      bestEl.textContent = getBest();
+    }
+    if (p.x + pipeW < -30) { pipes.splice(i, 1); continue; }
+    // Collision
+    const br = bird.r * .68;
+    if (bird.x + br > p.x && bird.x - br < p.x + pipeW) {
+      if (bird.y - br < p.topH || bird.y + br > p.topH + gap) { die(); return; }
+    }
+  }
+  if (bird.y + bird.r > H - 16 || bird.y - bird.r < 0) { die(); return; }
+}
+
+function die() {
+  running = false; state = 'dead';
+  cancelAnimationFrame(raf);
+  draw(); // final frame
+  // Draw death overlay on canvas
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = 'rgba(13,15,26,.78)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+  ctx.font = `bold ${W*.1}px Space Mono`;
+  ctx.fillStyle = '#FF6B35';
+  ctx.fillText('GAME OVER', W/2, H*.38);
+  ctx.font = `${W*.055}px Space Mono`;
+  ctx.fillStyle = '#F0F2FF';
+  ctx.fillText(`Score: ${score}  ·  Phase ${phase}`, W/2, H*.50);
+  ctx.font = `${W*.04}px Space Mono`;
+  ctx.fillStyle = '#C0C4E0';
+  ctx.fillText('Tippe zum Weiterspielen', W/2, H*.63);
+}
+
+function drawStartScreen() {
+  const W = canvas.width, H = canvas.height;
+  // Background
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#070914'); bg.addColorStop(1,'#0D1A1A');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+  for (let i=0;i<28;i++) {
+    ctx.beginPath(); ctx.arc((i*113)%W,(i*67)%(H*.6),.8+(i*.17)%1.2,0,Math.PI*2);
+    ctx.fillStyle=`rgba(220,230,255,${.15+(i%3)*.12})`; ctx.fill();
+  }
+  ctx.fillStyle='#0E1F14'; ctx.fillRect(0,H-16,W,16);
+  // Title
+  ctx.textAlign='center';
+  ctx.font=`bold ${W*.12}px Space Mono`;
+  ctx.fillStyle='#FF6B35';
+  ctx.shadowColor='#FF6B35'; ctx.shadowBlur=20;
+  ctx.fillText('FLAPPY', W/2, H*.35);
+  ctx.shadowBlur=0;
+  ctx.font=`${W*.045}px Space Mono`;
+  ctx.fillStyle='#C0C4E0';
+  ctx.fillText('Tippe zum Starten', W/2, H*.52);
+  // Bird preview
+  ctx.save(); ctx.translate(W*.5, H*.7);
+  ctx.shadowColor='#FF6B35'; ctx.shadowBlur=16;
+  const br=W*.042;
+  const bGrad=ctx.createRadialGradient(-br*.25,-br*.25,br*.1,0,0,br);
+  bGrad.addColorStop(0,'#FF9060'); bGrad.addColorStop(1,'#CC2200');
+  ctx.beginPath(); ctx.arc(0,0,br,0,Math.PI*2); ctx.fillStyle=bGrad; ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(br*.38,-br*.22,br*.24,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(br*.46,-br*.18,br*.11,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function draw() {
+  const W = canvas.width, H = canvas.height;
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#070914'); bg.addColorStop(1,'#0D1A1A');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+  for (let i=0;i<28;i++) {
+    ctx.beginPath(); ctx.arc((i*113)%W,(i*67)%(H*.6),.8+(i*.17)%1.2,0,Math.PI*2);
+    ctx.fillStyle=`rgba(220,230,255,${.15+(i%3)*.12})`; ctx.fill();
+  }
+
+  const pipeW = W*.11;
+  const gap = bird ? Math.max(H*(DIFF[selectedDiff].gapRatio-pipesPassed*.0018),H*.16) : H*DIFF[selectedDiff].gapRatio;
+
+  pipes.forEach(p => {
+    const g = ctx.createLinearGradient(p.x,0,p.x+pipeW,0);
+    g.addColorStop(0,'#1A4020'); g.addColorStop(.4,'#2A6030'); g.addColorStop(1,'#1A4020');
+    ctx.fillStyle=g;
+    ctx.fillRect(p.x,0,pipeW,p.topH);
+    ctx.fillRect(p.x,p.topH+gap,pipeW,H-(p.topH+gap));
+    ctx.shadowColor='#39FF14'; ctx.shadowBlur=10; ctx.fillStyle='#39FF14';
+    ctx.beginPath(); ctx.roundRect(p.x-3,p.topH-14,pipeW+6,14,2); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(p.x-3,p.topH+gap,pipeW+6,14,2); ctx.fill();
+    ctx.shadowBlur=0;
+  });
+
+  ctx.fillStyle='#0E1F14'; ctx.fillRect(0,H-16,W,16);
+  ctx.strokeStyle='rgba(57,255,20,.3)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(0,H-16); ctx.lineTo(W,H-16); ctx.stroke();
+
+  if (bird) {
+    ctx.save(); ctx.translate(bird.x, bird.y);
+    ctx.rotate(Math.max(-.5, Math.min(.9, bird.vy*.055)));
+    ctx.shadowColor='#FF6B35'; ctx.shadowBlur=18;
+    const br=bird.r;
+    const bGrad=ctx.createRadialGradient(-br*.25,-br*.25,br*.1,0,0,br);
+    bGrad.addColorStop(0,'#FF9060'); bGrad.addColorStop(1,'#CC2200');
+    ctx.beginPath(); ctx.arc(0,0,br,0,Math.PI*2); ctx.fillStyle=bGrad; ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(br*.38,-br*.22,br*.24,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(br*.46,-br*.18,br*.11,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.font=`bold ${W*.09}px Space Mono`; ctx.textAlign='center';
+  ctx.fillStyle='rgba(240,242,255,.1)';
+  ctx.fillText(score, W/2, H*.13);
+}
+
+bestEl.textContent = getBest();
+showStart();
+</script>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Reaction — PIXELBOX</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#0D0F1A;color:#F0F2FF;font-family:'Space Mono',monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100dvh;overflow:hidden;touch-action:manipulation;user-select:none;}
+  #wrapper{width:min(96vw,420px);display:flex;flex-direction:column;align-items:center;gap:16px;}
+  #hud{width:100%;display:flex;justify-content:space-between;padding:0 4px;}
+  .hud-label{font-size:10px;letter-spacing:.15em;color:#FFD166;opacity:.6;text-transform:uppercase;}
+  .hud-value{font-size:20px;font-weight:700;color:#F0F2FF;line-height:1;}
+  #arena{width:100%;aspect-ratio:1;background:#12152A;border-radius:8px;position:relative;overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  #status{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
+  #big-text{font-size:clamp(28px,10vw,52px);font-weight:700;letter-spacing:.05em;text-align:center;line-height:1.2;}
+  #sub-text{font-size:13px;opacity:.5;letter-spacing:.08em;}
+  #target{position:absolute;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;transition:opacity .15s;}
+  #results{width:100%;display:none;flex-direction:column;gap:6px;}
+  .result-row{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#12152A;border-radius:4px;font-size:13px;}
+  .result-row span:last-child{color:#FFD166;}
+  #overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(13,15,26,.92);backdrop-filter:blur(4px);transition:opacity .3s;z-index:10;}
+  #overlay.hidden{opacity:0;pointer-events:none;}
+  .ov-title{font-size:36px;font-weight:700;letter-spacing:.08em;color:#FFD166;text-shadow:0 0 24px rgba(255,209,102,.6);}
+  .ov-sub{font-size:12px;letter-spacing:.08em;color:#F0F2FF;opacity:.5;}
+  #start-btn{padding:14px 40px;background:transparent;border:2px solid #FFD166;color:#FFD166;font-family:'Space Mono',monospace;font-size:14px;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;border-radius:2px;-webkit-tap-highlight-color:transparent;}
+  #start-btn:active{background:#FFD166;color:#0D0F1A;}
+</style>
+</head>
+<body>
+<div id="wrapper">
+  <div id="hud">
+    <div><div class="hud-label">Runde</div><div class="hud-value" id="round-el">0/5</div></div>
+    <div><div class="hud-label">Avg</div><div class="hud-value" id="avg-el">—</div></div>
+    <div style="text-align:right"><div class="hud-label">Best</div><div class="hud-value" id="best-el">—</div></div>
+  </div>
+  <div id="arena">
+    <div id="status">
+      <div id="big-text" style="color:#FFD166">REACTION</div>
+      <div id="sub-text">Tippe START</div>
+    </div>
+    <div id="target" style="display:none"></div>
+  </div>
+  <div id="results"></div>
+</div>
+<div id="overlay">
+  <div class="ov-title">REACTION</div>
+  <div class="ov-sub">Tippe so schnell wie möglich!</div>
+  <button id="start-btn">START</button>
+</div>
+<script>
+const arena=document.getElementById('arena');
+const bigText=document.getElementById('big-text');
+const subText=document.getElementById('sub-text');
+const target=document.getElementById('target');
+const resultsEl=document.getElementById('results');
+const roundEl=document.getElementById('round-el');
+const avgEl=document.getElementById('avg-el');
+const bestEl=document.getElementById('best-el');
+const overlay=document.getElementById('overlay');
+const startBtn=document.getElementById('start-btn');
+
+const ROUNDS=5;
+let best=parseInt(localStorage.getItem('pb_reaction')||'9999');
+bestEl.textContent=best===9999?'—':best+'ms';
+
+let round,times,waiting,startTime,timeout,phase;
+
+function init(){round=0;times=[];resultsEl.style.display='none';resultsEl.innerHTML='';roundEl.textContent=`0/${ROUNDS}`;avgEl.textContent='—';nextRound();}
+
+function nextRound(){
+  if(round>=ROUNDS){showResults();return;}
+  phase='waiting';waiting=true;
+  bigText.style.color='#FF6B35';bigText.textContent='WAIT...';
+  subText.textContent='Warte auf Grün...';
+  target.style.display='none';
+  const delay=1000+Math.random()*3000;
+  timeout=setTimeout(showTarget,delay);
+  arena.onclick=()=>{if(phase==='waiting'){clearTimeout(timeout);tooEarly();}};
+}
+
+function showTarget(){
+  phase='react';
+  const size=arena.offsetWidth*0.18;
+  const maxX=arena.offsetWidth-size,maxY=arena.offsetHeight-size;
+  const tx=size/2+Math.random()*maxX,ty=size/2+Math.random()*maxY;
+  target.style.cssText=`display:block;width:${size}px;height:${size}px;left:${tx}px;top:${ty}px;background:#39FF14;box-shadow:0 0 24px rgba(57,255,20,.8);opacity:1;`;
+  bigText.style.color='#39FF14';bigText.textContent='TAP!';
+  subText.textContent='';
+  startTime=performance.now();
+  arena.onclick=recordTap;
+}
+
+function recordTap(){
+  if(phase!=='react')return;
+  const ms=Math.round(performance.now()-startTime);
+  times.push(ms);round++;
+  target.style.opacity='0';
+  const color=ms<200?'#39FF14':ms<350?'#FFD166':'#FF6B35';
+  bigText.style.color=color;bigText.textContent=ms+'ms';
+  subText.textContent=ms<200?'⚡ Blitz!':ms<350?'👍 Gut!':'😅 Zu langsam';
+  roundEl.textContent=`${round}/${ROUNDS}`;
+  const avg=Math.round(times.reduce((a,b)=>a+b,0)/times.length);
+  avgEl.textContent=avg+'ms';
+  phase='between';arena.onclick=null;
+  setTimeout(nextRound,900);
+}
+
+function tooEarly(){
+  phase='between';
+  bigText.style.color='#FF6B35';bigText.textContent='ZU FRÜH!';
+  subText.textContent='Strafe: +500ms';
+  times.push(500);round++;
+  roundEl.textContent=`${round}/${ROUNDS}`;
+  setTimeout(nextRound,1200);
+}
+
+function showResults(){
+  const avg=Math.round(times.reduce((a,b)=>a+b,0)/times.length);
+  if(avg<best){best=avg;localStorage.setItem('pb_reaction',best);bestEl.textContent=best+'ms';}
+  avgEl.textContent=avg+'ms';
+  bigText.style.color='#FFD166';bigText.textContent='FERTIG!';
+  subText.textContent=`Ø ${avg}ms`;
+  resultsEl.style.display='flex';
+  resultsEl.innerHTML=times.map((t,i)=>`<div class="result-row"><span>Runde ${i+1}</span><span>${t}ms</span></div>`).join('');
+  arena.onclick=()=>{init();};
+  subText.textContent=`Ø ${avg}ms — Tippe für nochmal`;
+}
+
+startBtn.addEventListener('click',()=>{overlay.classList.add('hidden');init();});
+</script>
+</body>
+</html>

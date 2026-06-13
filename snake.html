@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Snake — PIXELBOX</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#0D0F1A;color:#F0F2FF;font-family:'Space Mono',monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100dvh;overflow:hidden;touch-action:none;user-select:none;}
+  #wrapper{position:relative;width:min(100vw,480px);display:flex;flex-direction:column;align-items:center;gap:10px;}
+  #hud{width:100%;display:flex;justify-content:space-between;align-items:flex-end;padding:0 4px;}
+  .hud-label{font-size:10px;letter-spacing:.15em;color:#39FF14;opacity:.6;text-transform:uppercase;}
+  .hud-value{font-size:22px;font-weight:700;color:#F0F2FF;line-height:1;}
+  canvas{display:block;border-radius:4px;width:100%;image-rendering:pixelated;}
+  #overlay{position:absolute;top:44px;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(13,15,26,.88);border-radius:4px;backdrop-filter:blur(4px);transition:opacity .3s;}
+  #overlay.hidden{opacity:0;pointer-events:none;}
+  .ov-title{font-size:36px;font-weight:700;letter-spacing:.08em;color:#39FF14;text-shadow:0 0 24px rgba(57,255,20,.6);}
+  .ov-sub{font-size:12px;letter-spacing:.08em;color:#F0F2FF;opacity:.5;}
+  #death-msg{font-size:13px;color:#FF6B35;letter-spacing:.1em;display:none;}
+  .diff-row{display:flex;gap:8px;}
+  .diff-btn{padding:9px 18px;background:transparent;border:2px solid rgba(255,255,255,.15);color:rgba(255,255,255,.4);font-size:12px;letter-spacing:.1em;cursor:pointer;border-radius:2px;transition:all .15s;-webkit-tap-highlight-color:transparent;font-family:'Space Mono',monospace;}
+  .diff-btn.easy{border-color:#39FF14;color:#39FF14;} .diff-btn.normal{border-color:#00E5FF;color:#00E5FF;} .diff-btn.hard{border-color:#FF6B35;color:#FF6B35;}
+  .diff-btn.selected.easy{background:#39FF14;color:#0D0F1A;} .diff-btn.selected.normal{background:#00E5FF;color:#0D0F1A;} .diff-btn.selected.hard{background:#FF6B35;color:#0D0F1A;}
+  #start-btn{padding:14px 40px;background:transparent;border:2px solid #39FF14;color:#39FF14;font-family:'Space Mono',monospace;font-size:14px;letter-spacing:.15em;cursor:pointer;border-radius:2px;-webkit-tap-highlight-color:transparent;}
+  #start-btn:active{background:#39FF14;color:#0D0F1A;}
+  .diff-section{display:flex;flex-direction:column;align-items:center;gap:8px;}
+  .diff-section-label{font-size:10px;letter-spacing:.15em;color:#F0F2FF;opacity:.35;text-transform:uppercase;}
+  #dpad{display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,44px);gap:4px;}
+  #dpad button{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#F0F2FF;font-size:18px;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
+  #dpad button:active{background:rgba(57,255,20,.25);}
+  .dp-empty{background:transparent!important;border:none!important;}
+</style>
+</head>
+<body>
+<div id="wrapper">
+  <div id="hud">
+    <div><div class="hud-label">Score</div><div class="hud-value" id="score-el">0</div></div>
+    <div style="text-align:center"><div class="hud-label">Speed</div><div class="hud-value" id="speed-el" style="font-size:16px;color:#39FF14">1</div></div>
+    <div style="text-align:right"><div class="hud-label">Best</div><div class="hud-value" id="best-el">0</div></div>
+  </div>
+  <canvas id="c"></canvas>
+  <div id="dpad">
+    <button class="dp-empty"></button><button id="btn-up">▲</button><button class="dp-empty"></button>
+    <button id="btn-left">◀</button><button class="dp-empty"></button><button id="btn-right">▶</button>
+    <button class="dp-empty"></button><button id="btn-down">▼</button><button class="dp-empty"></button>
+  </div>
+  <div id="overlay">
+    <div class="ov-title">SNAKE</div>
+    <div class="ov-sub">D-Pad · Pfeiltasten · Swipe</div>
+    <div id="death-msg"></div>
+    <div class="diff-section">
+      <div class="diff-section-label">Schwierigkeit</div>
+      <div class="diff-row">
+        <button class="diff-btn easy selected" data-diff="easy">EASY</button>
+        <button class="diff-btn normal" data-diff="normal">NORMAL</button>
+        <button class="diff-btn hard" data-diff="hard">HARD</button>
+      </div>
+    </div>
+    <button id="start-btn">START</button>
+  </div>
+</div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const overlay=document.getElementById('overlay');
+const startBtn=document.getElementById('start-btn');
+const scoreEl=document.getElementById('score-el');
+const bestEl=document.getElementById('best-el');
+const speedEl=document.getElementById('speed-el');
+const deathMsg=document.getElementById('death-msg');
+
+const DIFF={easy:{base:160,step:8,min:80},normal:{base:120,step:10,min:55},hard:{base:90,step:12,min:35}};
+let selectedDiff='easy';
+
+document.querySelectorAll('.diff-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected');selectedDiff=btn.dataset.diff;bestEl.textContent=getBest();});
+});
+
+const COLS=20,ROWS=20;
+let CELL;
+function resize(){const w=Math.min(window.innerWidth,480);canvas.width=w;canvas.height=w;CELL=w/COLS;}
+resize();window.addEventListener('resize',resize);
+
+function getBest(){return parseInt(localStorage.getItem('pb_snake_'+selectedDiff)||'0');}
+function setBest(v){localStorage.setItem('pb_snake_'+selectedDiff,v);}
+
+let snake,dir,nextDir,food,score,running,interval,speedTier;
+
+function init(){
+  snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir={x:1,y:0};nextDir={x:1,y:0};
+  score=0;speedTier=1;scoreEl.textContent='0';speedEl.textContent='1';
+  placeFood();
+}
+
+function placeFood(){
+  let pos;
+  do{pos={x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*ROWS)};}
+  while(snake.some(s=>s.x===pos.x&&s.y===pos.y));
+  food=pos;
+}
+
+function getInterval(){
+  const cfg=DIFF[selectedDiff];
+  return Math.max(cfg.base-score*cfg.step,cfg.min);
+}
+
+function step(){
+  dir=nextDir;
+  const head={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
+  if(head.x<0||head.x>=COLS||head.y<0||head.y>=ROWS||snake.some(s=>s.x===head.x&&s.y===head.y)){die();return;}
+  snake.unshift(head);
+  if(head.x===food.x&&head.y===food.y){
+    score++;scoreEl.textContent=score;
+    const best=getBest();if(score>best)setBest(score);bestEl.textContent=getBest();
+    // Speed up every 5 food
+    const newTier=1+Math.floor(score/5);
+    if(newTier!==speedTier){speedTier=newTier;speedEl.textContent=speedTier;clearInterval(interval);interval=setInterval(step,getInterval());}
+    placeFood();
+  } else {snake.pop();}
+  draw();
+}
+
+function die(){clearInterval(interval);running=false;deathMsg.textContent=`Score: ${score} · Speed ${speedTier}`;deathMsg.style.display='block';overlay.classList.remove('hidden');}
+
+function draw(){
+  const W=canvas.width;
+  ctx.fillStyle='#0D0F1A';ctx.fillRect(0,0,W,W);
+  ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=1;
+  for(let i=0;i<=COLS;i++){ctx.beginPath();ctx.moveTo(i*CELL,0);ctx.lineTo(i*CELL,W);ctx.stroke();}
+  for(let j=0;j<=ROWS;j++){ctx.beginPath();ctx.moveTo(0,j*CELL);ctx.lineTo(W,j*CELL);ctx.stroke();}
+  ctx.shadowColor='#FF6B35';ctx.shadowBlur=14;ctx.fillStyle='#FF6B35';
+  ctx.beginPath();ctx.arc(food.x*CELL+CELL/2,food.y*CELL+CELL/2,CELL*.38,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+  snake.forEach((s,i)=>{
+    const t=1-i/snake.length;
+    ctx.shadowColor='#39FF14';ctx.shadowBlur=i===0?18:4;
+    ctx.fillStyle=i===0?'#39FF14':`rgba(57,255,20,${.3+t*.7})`;
+    ctx.beginPath();ctx.roundRect(s.x*CELL+1,s.y*CELL+1,CELL-2,CELL-2,3);ctx.fill();
+  });
+  ctx.shadowBlur=0;
+}
+
+function start(){
+  overlay.classList.add('hidden');deathMsg.style.display='none';startBtn.textContent='RESTART';
+  init();running=true;clearInterval(interval);interval=setInterval(step,getInterval());draw();
+}
+
+startBtn.addEventListener('click',start);
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowUp'&&dir.y===0){nextDir={x:0,y:-1};e.preventDefault();}
+  if(e.key==='ArrowDown'&&dir.y===0){nextDir={x:0,y:1};e.preventDefault();}
+  if(e.key==='ArrowLeft'&&dir.x===0){nextDir={x:-1,y:0};e.preventDefault();}
+  if(e.key==='ArrowRight'&&dir.x===0){nextDir={x:1,y:0};e.preventDefault();}
+});
+document.getElementById('btn-up').addEventListener('click',()=>{if(dir.y===0)nextDir={x:0,y:-1};});
+document.getElementById('btn-down').addEventListener('click',()=>{if(dir.y===0)nextDir={x:0,y:1};});
+document.getElementById('btn-left').addEventListener('click',()=>{if(dir.x===0)nextDir={x:-1,y:0};});
+document.getElementById('btn-right').addEventListener('click',()=>{if(dir.x===0)nextDir={x:1,y:0};});
+let tx=0,ty=0;
+document.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});
+document.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;if(Math.abs(dx)>Math.abs(dy)){if(dx>20&&dir.x===0)nextDir={x:1,y:0};else if(dx<-20&&dir.x===0)nextDir={x:-1,y:0};}else{if(dy>20&&dir.y===0)nextDir={x:0,y:1};else if(dy<-20&&dir.y===0)nextDir={x:0,y:-1};}},{passive:true});
+draw();
+</script>
+</body>
+</html>

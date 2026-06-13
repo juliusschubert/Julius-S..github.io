@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Brick Breaker — PIXELBOX</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#0D0F1A;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100dvh;overflow:hidden;touch-action:none;user-select:none;font-family:'Space Mono',monospace;}
+  #wrapper{position:relative;width:min(100vw,420px);display:flex;flex-direction:column;align-items:center;gap:10px;}
+  #hud{width:100%;display:flex;justify-content:space-between;align-items:flex-end;padding:0 4px;}
+  .hud-label{font-size:10px;letter-spacing:.15em;color:#00E5FF;opacity:.8;text-transform:uppercase;}
+  .hud-value{font-size:20px;font-weight:700;color:#F0F2FF;line-height:1;}
+  #lives-display{display:flex;gap:4px;align-items:center;}
+  .heart{width:14px;height:14px;background:#FF4466;clip-path:path('M7 13L1.5 7.5C0 6 0 3.5 1.5 2S5 1 7 3.5C9 1 11.5 1 12.5 2S14 6 12.5 7.5Z');transition:opacity .3s;}
+  .heart.lost{opacity:.15;}
+  canvas{display:block;border-radius:4px;width:100%;}
+  #overlay{position:absolute;top:52px;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(13,15,26,.9);border-radius:4px;backdrop-filter:blur(4px);transition:opacity .3s;}
+  #overlay.hidden{opacity:0;pointer-events:none;}
+  .ov-title{font-size:36px;font-weight:700;color:#00E5FF;text-shadow:0 0 24px rgba(0,229,255,.7);}
+  .ov-sub{font-size:12px;color:#C0C4E0;letter-spacing:.06em;}
+  #msg{font-size:13px;color:#FF6B35;display:none;text-align:center;}
+  .diff-section{display:flex;flex-direction:column;align-items:center;gap:8px;}
+  .diff-section-label{font-size:10px;letter-spacing:.15em;color:#C0C4E0;opacity:.7;text-transform:uppercase;}
+  .diff-row{display:flex;gap:8px;}
+  .diff-btn{padding:10px 20px;background:transparent;font-size:12px;cursor:pointer;border-radius:3px;font-family:'Space Mono',monospace;-webkit-tap-highlight-color:transparent;transition:all .15s;font-weight:700;}
+  .diff-btn.easy{border:2px solid #39FF14;color:#39FF14;}
+  .diff-btn.normal{border:2px solid #00E5FF;color:#00E5FF;}
+  .diff-btn.hard{border:2px solid #FF6B35;color:#FF6B35;}
+  .diff-btn.selected.easy{background:#39FF14;color:#0D0F1A;}
+  .diff-btn.selected.normal{background:#00E5FF;color:#0D0F1A;}
+  .diff-btn.selected.hard{background:#FF6B35;color:#0D0F1A;}
+  #start-btn{padding:14px 44px;background:transparent;border:2px solid #00E5FF;color:#00E5FF;font-family:'Space Mono',monospace;font-size:15px;letter-spacing:.12em;cursor:pointer;border-radius:3px;font-weight:700;-webkit-tap-highlight-color:transparent;}
+  #start-btn:active{background:#00E5FF;color:#0D0F1A;}
+</style>
+</head>
+<body>
+<div id="wrapper">
+  <div id="hud">
+    <div><div class="hud-label">Score</div><div class="hud-value" id="score-el">0</div></div>
+    <div style="text-align:center"><div class="hud-label">Level</div><div class="hud-value" id="level-el" style="color:#00E5FF">1</div></div>
+    <div style="text-align:center"><div class="hud-label">Bälle</div><div class="hud-value" id="balls-el" style="color:#FFD166">1</div></div>
+    <div style="text-align:right"><div class="hud-label">Leben</div><div id="lives-display"></div></div>
+  </div>
+  <canvas id="c"></canvas>
+  <div id="overlay">
+    <div class="ov-title">BRICKS</div>
+    <div class="ov-sub">Maus · Touch zum Bewegen</div>
+    <div id="msg"></div>
+    <div class="diff-section">
+      <div class="diff-section-label">Schwierigkeit</div>
+      <div class="diff-row">
+        <button class="diff-btn easy selected" data-diff="easy">EASY</button>
+        <button class="diff-btn normal" data-diff="normal">NORMAL</button>
+        <button class="diff-btn hard" data-diff="hard">HARD</button>
+      </div>
+    </div>
+    <button id="start-btn">START</button>
+  </div>
+</div>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const overlay=document.getElementById('overlay');
+const startBtn=document.getElementById('start-btn');
+const scoreEl=document.getElementById('score-el');
+const levelEl=document.getElementById('level-el');
+const livesDisplay=document.getElementById('lives-display');
+const ballsEl=document.getElementById('balls-el');
+const msgEl=document.getElementById('msg');
+
+const DIFF={
+  easy:  {lives:5,baseSpeed:.006,paddleW:.28,brickHp:1,maxBalls:3,newBallEvery:8},
+  normal:{lives:3,baseSpeed:.007,paddleW:.22,brickHp:1,maxBalls:4,newBallEvery:6},
+  hard:  {lives:2,baseSpeed:.009,paddleW:.16,brickHp:2,maxBalls:5,newBallEvery:4},
+};
+const BALL_COLORS=['#00E5FF','#FFD166','#FF6B35','#39FF14','#A855F7'];
+const BRICK_COLORS=['#FF6B35','#FFD166','#39FF14','#00E5FF','#A855F7','#FF6B9D'];
+let selectedDiff='easy';
+
+document.querySelectorAll('.diff-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected');selectedDiff=btn.dataset.diff;});
+});
+
+function resize(){const w=Math.min(window.innerWidth,420);canvas.width=w;canvas.height=Math.round(w*1.3);}
+resize();window.addEventListener('resize',resize);
+
+function getBest(){return parseInt(localStorage.getItem('pb_bricks_'+selectedDiff)||'0');}
+function setBest(v){localStorage.setItem('pb_bricks_'+selectedDiff,v);}
+
+const ROWS=6,COLS=8;
+let paddle,balls,bricks,score,lives,running,raf,particles,level,bricksCleared,speedBoost;
+
+function renderLives(){
+  const cfg=DIFF[selectedDiff];
+  livesDisplay.innerHTML=Array.from({length:cfg.lives},(_,i)=>`<div class="heart${i>=lives?' lost':''}"></div>`).join('');
+}
+
+function getBallSpeed(){
+  return canvas.width*(DIFF[selectedDiff].baseSpeed+(level-1)*.0015+speedBoost*.001);
+}
+
+function makeNewBall(src){
+  const spd=getBallSpeed();
+  const angle=(Math.random()-.5)*1.2;
+  return{
+    x:src?src.x:canvas.width/2,
+    y:src?src.y:canvas.height*.75,
+    r:canvas.width*.022,
+    vx:spd*Math.sin(angle)*(Math.random()>.5?1:-1),
+    vy:-spd*Math.cos(angle),
+    colorIdx:balls?balls.length%BALL_COLORS.length:0,
+    trail:[],
+  };
+}
+
+function setupLevel(){
+  const W=canvas.width,H=canvas.height;
+  const bw=(W-20)/(COLS+.5),bh=H*.035;
+  bricks=[];
+  const extraHp=Math.floor((level-1)*.5);
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    const hp=DIFF[selectedDiff].brickHp+(r<2?1:0)+extraHp;
+    bricks.push({x:10+c*(bw+4),y:H*.1+r*(bh+4),w:bw,h:bh,hp,maxHp:hp,color:BRICK_COLORS[r%BRICK_COLORS.length]});
+  }
+}
+
+function init(){
+  const W=canvas.width,H=canvas.height;
+  const cfg=DIFF[selectedDiff];
+  lives=cfg.lives;level=1;score=0;bricksCleared=0;speedBoost=0;
+  scoreEl.textContent='0';levelEl.textContent='1';
+  particles=[];
+  paddle={x:W/2,w:W*cfg.paddleW,h:H*.022,y:H*.88};
+  balls=[makeNewBall(null)];
+  ballsEl.textContent='1';
+  renderLives();
+  setupLevel();
+}
+
+function addNewBall(){
+  const cfg=DIFF[selectedDiff];
+  if(balls.length>=cfg.maxBalls)return;
+  const src=balls[Math.floor(Math.random()*balls.length)];
+  balls.push(makeNewBall(src));
+  ballsEl.textContent=balls.length;
+  for(let i=0;i<12;i++){const a=i/12*Math.PI*2;particles.push({x:src.x,y:src.y,vx:Math.cos(a)*3,vy:Math.sin(a)*3,life:25,color:'#FFD166',r:3});}
+}
+
+function update(){
+  const W=canvas.width,H=canvas.height;
+  const newBoost=Math.floor(bricksCleared/10);
+  if(newBoost>speedBoost){
+    speedBoost=newBoost;
+    const spd=getBallSpeed();
+    balls.forEach(b=>{const l=Math.sqrt(b.vx*b.vx+b.vy*b.vy);if(l>0){b.vx=b.vx/l*spd;b.vy=b.vy/l*spd;}});
+  }
+
+  for(let bi=balls.length-1;bi>=0;bi--){
+    const b=balls[bi];
+    b.trail.push({x:b.x,y:b.y,age:0});
+    if(b.trail.length>8)b.trail.shift();
+    b.trail.forEach(t=>t.age++);
+    b.x+=b.vx;b.y+=b.vy;
+    if(b.x-b.r<0){b.x=b.r;b.vx*=-1;}
+    if(b.x+b.r>W){b.x=W-b.r;b.vx*=-1;}
+    if(b.y-b.r<0){b.y=b.r;b.vy*=-1;}
+    if(b.y-b.r>H){
+      balls.splice(bi,1);ballsEl.textContent=balls.length;
+      loseLife();return;
+    }
+    const px=paddle.x-paddle.w/2;
+    if(b.vy>0&&b.y+b.r>paddle.y&&b.y-b.r<paddle.y+paddle.h&&b.x>px&&b.x<px+paddle.w){
+      b.vy=-Math.abs(b.vy);
+      b.vx=((b.x-(px+paddle.w/2))/(paddle.w/2))*W*.012;
+      const maxS=getBallSpeed()*1.8,l=Math.sqrt(b.vx*b.vx+b.vy*b.vy);
+      if(l>maxS){b.vx=b.vx/l*maxS;b.vy=b.vy/l*maxS;}
+      for(let i=0;i<5;i++)particles.push({x:b.x,y:paddle.y,vx:(Math.random()-.5)*3,vy:-Math.random()*3,life:15,color:BALL_COLORS[b.colorIdx],r:2});
+    }
+    for(let i=bricks.length-1;i>=0;i--){
+      const br=bricks[i];
+      if(b.x+b.r>br.x&&b.x-b.r<br.x+br.w&&b.y+b.r>br.y&&b.y-b.r<br.y+br.h){
+        const ol=b.x+b.r-br.x,or2=br.x+br.w-(b.x-b.r),ot=b.y+b.r-br.y,ob=br.y+br.h-(b.y-b.r);
+        if(Math.min(ol,or2)<Math.min(ot,ob))b.vx*=-1;else b.vy*=-1;
+        br.hp--;
+        for(let j=0;j<6;j++)particles.push({x:br.x+br.w/2,y:br.y+br.h/2,vx:(Math.random()-.5)*5,vy:(Math.random()-.5)*5,life:20,color:br.color,r:2+Math.random()*2});
+        if(br.hp<=0){bricks.splice(i,1);score+=10*level;bricksCleared++;scoreEl.textContent=score;if(score>getBest())setBest(score);const cfg=DIFF[selectedDiff];if(bricksCleared%cfg.newBallEvery===0)addNewBall();}
+        break;
+      }
+    }
+  }
+  if(bricks.length===0){level++;levelEl.textContent=level;speedBoost=0;setupLevel();}
+  particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=.1;p.life--;});
+  particles=particles.filter(p=>p.life>0);
+}
+
+function loseLife(){
+  lives--;renderLives();
+  if(lives<=0){endGame('Game Over');return;}
+  balls=[makeNewBall(null)];ballsEl.textContent='1';
+}
+
+function endGame(txt){
+  running=false;cancelAnimationFrame(raf);
+  msgEl.textContent=`${txt} — Score: ${score} · Level ${level}`;msgEl.style.display='block';overlay.classList.remove('hidden');
+}
+
+function draw(){
+  const W=canvas.width,H=canvas.height;
+  ctx.fillStyle='#0D0F1A';ctx.fillRect(0,0,W,H);
+  bricks.forEach(b=>{
+    const alpha=.45+.55*(b.hp/b.maxHp);
+    ctx.shadowColor=b.color;ctx.shadowBlur=b.hp===b.maxHp?10:4;
+    ctx.fillStyle=b.color+(Math.round(alpha*255).toString(16).padStart(2,'0'));
+    ctx.beginPath();ctx.roundRect(b.x,b.y,b.w,b.h,2);ctx.fill();
+    if(b.hp<b.maxHp){ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.roundRect(b.x+2,b.y+2,b.w-4,b.h-4,2);ctx.fill();}
+  });ctx.shadowBlur=0;
+  particles.forEach(p=>{ctx.globalAlpha=Math.max(0,p.life/20);ctx.beginPath();ctx.arc(p.x,p.y,Math.max(.1,p.r),0,Math.PI*2);ctx.fillStyle=p.color;ctx.fill();});ctx.globalAlpha=1;
+  ctx.shadowColor='#00E5FF';ctx.shadowBlur=16;
+  const pg=ctx.createLinearGradient(paddle.x-paddle.w/2,0,paddle.x+paddle.w/2,0);pg.addColorStop(0,'#0066AA');pg.addColorStop(.5,'#00E5FF');pg.addColorStop(1,'#0066AA');
+  ctx.fillStyle=pg;ctx.beginPath();ctx.roundRect(paddle.x-paddle.w/2,paddle.y,paddle.w,paddle.h,paddle.h/2);ctx.fill();ctx.shadowBlur=0;
+  balls.forEach(b=>{
+    const col=BALL_COLORS[b.colorIdx];
+    b.trail.forEach(t=>{ctx.globalAlpha=(1-t.age/8)*.3;ctx.beginPath();ctx.arc(t.x,t.y,b.r*(1-t.age/8),0,Math.PI*2);ctx.fillStyle=col;ctx.fill();});ctx.globalAlpha=1;
+    ctx.shadowColor=col;ctx.shadowBlur=18;
+    const bg=ctx.createRadialGradient(b.x-b.r*.3,b.y-b.r*.3,b.r*.1,b.x,b.y,b.r);
+    bg.addColorStop(0,col==='#00E5FF'?'#80F4FF':col==='#FFD166'?'#FFE8A0':'#FF9070');bg.addColorStop(1,col);
+    ctx.fillStyle=bg;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+  });
+  if(speedBoost>0){ctx.fillStyle=`rgba(255,209,102,${Math.min(speedBoost*.12,.4)})`;ctx.fillRect(0,0,W,3);}
+}
+
+function loop(){update();draw();raf=requestAnimationFrame(loop);}
+function start(){overlay.classList.add('hidden');msgEl.style.display='none';startBtn.textContent='RESTART';init();running=true;if(raf)cancelAnimationFrame(raf);loop();}
+startBtn.addEventListener('click',start);
+function movePaddle(cx){if(!running)return;const rect=canvas.getBoundingClientRect();paddle.x=Math.max(paddle.w/2,Math.min(canvas.width-paddle.w/2,(cx-rect.left)*(canvas.width/rect.width)));}
+canvas.addEventListener('mousemove',e=>movePaddle(e.clientX));
+canvas.addEventListener('touchmove',e=>{e.preventDefault();movePaddle(e.touches[0].clientX);},{passive:false});
+draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Quiz Battle — PIXELBOX</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#0D0F1A;color:#F0F2FF;font-family:'Space Grotesk',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100dvh;overflow:hidden;user-select:none;padding:8px;}
+  #wrapper{width:min(96vw,440px);display:flex;flex-direction:column;align-items:center;gap:10px;}
+  #scoreboard{width:100%;display:flex;gap:6px;}
+  .p-card{flex:1;background:#12152A;border-radius:6px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;border:2px solid transparent;transition:border-color .2s;}
+  .p-card.active{border-color:currentColor;}
+  .p-name{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;}
+  .p-score{font-family:'Space Mono',monospace;font-size:22px;font-weight:700;line-height:1;}
+  #progress{width:100%;height:6px;background:#1E2245;border-radius:3px;overflow:hidden;}
+  #progress-bar{height:100%;background:#A855F7;transition:width .1s linear;}
+  #question-area{width:100%;background:#12152A;border-radius:8px;padding:16px;text-align:center;}
+  #q-cat{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.15em;color:#A855F7;text-transform:uppercase;margin-bottom:8px;font-weight:700;}
+  #q-text{font-size:15px;line-height:1.5;color:#F0F2FF;}
+  #q-num{font-family:'Space Mono',monospace;font-size:10px;color:#C0C4E0;margin-top:6px;}
+  #answers{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .ans-btn{padding:14px 8px;background:#12152A;border:2px solid #1E2245;color:#C0C4E0;font-size:13px;cursor:pointer;border-radius:6px;-webkit-tap-highlight-color:transparent;transition:all .15s;text-align:center;line-height:1.3;}
+  .ans-btn:active{transform:scale(.97);}
+  .ans-btn.correct{background:#0D1F0D;border-color:#39FF14;color:#39FF14;}
+  .ans-btn.wrong{background:#1F0D0D;border-color:#FF4444;color:#FF4444;}
+  .ans-btn.reveal{background:#0D1A0D;border-color:#39FF14;color:#39FF14;}
+  #turn-info{font-family:'Space Mono',monospace;font-size:12px;letter-spacing:.1em;text-align:center;min-height:20px;font-weight:700;}
+  #overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(13,15,26,.93);backdrop-filter:blur(4px);z-index:10;padding:20px;overflow-y:auto;}
+  #overlay.hidden{opacity:0;pointer-events:none;}
+  .ov-title{font-family:'Space Mono',monospace;font-size:34px;font-weight:700;color:#A855F7;text-shadow:0 0 24px rgba(168,85,247,.6);}
+  .ov-sub{font-size:12px;color:#C0C4E0;text-align:center;line-height:1.8;}
+  #result-area{width:100%;max-width:380px;display:none;flex-direction:column;gap:6px;}
+  .result-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#12152A;border-radius:6px;font-size:14px;}
+  .section-label{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.15em;color:#C0C4E0;text-transform:uppercase;font-weight:700;}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+  .sel-btn{padding:10px 16px;background:transparent;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;cursor:pointer;border-radius:3px;-webkit-tap-highlight-color:transparent;transition:all .15s;}
+  .psel{border:2px solid #A855F7;color:#A855F7;}
+  .psel.selected{background:#A855F7;color:#F0F2FF;}
+  .rsel{border:2px solid #FFD166;color:#FFD166;}
+  .rsel.selected{background:#FFD166;color:#0D0F1A;}
+  #start-btn{padding:14px 44px;background:transparent;border:2px solid #A855F7;color:#A855F7;font-family:'Space Mono',monospace;font-size:15px;letter-spacing:.12em;cursor:pointer;border-radius:3px;font-weight:700;-webkit-tap-highlight-color:transparent;}
+  #start-btn:active{background:#A855F7;color:#F0F2FF;}
+</style>
+</head>
+<body>
+<div id="wrapper">
+  <div id="scoreboard"></div>
+  <div id="progress"><div id="progress-bar" style="width:100%"></div></div>
+  <div id="turn-info"></div>
+  <div id="question-area">
+    <div id="q-cat"></div>
+    <div id="q-text">Bereit?</div>
+    <div id="q-num"></div>
+  </div>
+  <div id="answers"></div>
+</div>
+<div id="overlay">
+  <div class="ov-title">QUIZ BATTLE</div>
+  <div class="ov-sub">Jeder Spieler beantwortet reihum Fragen<br>Richtig = 10 Punkte · Schneller = Bonus</div>
+  <div id="result-area"></div>
+  <div class="section-label">Spieler</div>
+  <div class="btn-row" id="p-row">
+    <button class="sel-btn psel" data-p="2">2P</button>
+    <button class="sel-btn psel selected" data-p="3">3P</button>
+    <button class="sel-btn psel" data-p="4">4P</button>
+  </div>
+  <div class="section-label">Runden</div>
+  <div class="btn-row" id="r-row">
+    <button class="sel-btn rsel" data-r="5">5</button>
+    <button class="sel-btn rsel selected" data-r="10">10</button>
+    <button class="sel-btn rsel" data-r="20">20</button>
+    <button class="sel-btn rsel" data-r="30">30</button>
+  </div>
+  <button id="start-btn">START</button>
+</div>
+<script>
+const PLAYER_COLORS = ['#00E5FF','#FF6B35','#39FF14','#A855F7'];
+const PLAYER_NAMES = ['Spieler 1','Spieler 2','Spieler 3','Spieler 4'];
+
+const QUESTIONS = [
+  {q:"Was ist die Hauptstadt von Deutschland?",a:["Berlin","München","Hamburg","Frankfurt"],c:0,cat:"🌍 Geo"},
+  {q:"Wie viele Seiten hat ein Oktagon?",a:["6","7","8","9"],c:2,cat:"🔢 Mathe"},
+  {q:"Welches Element hat das Symbol 'O'?",a:["Gold","Osmium","Sauerstoff","Ozon"],c:2,cat:"🧪 Chemie"},
+  {q:"In welchem Jahr fiel die Berliner Mauer?",a:["1987","1988","1989","1990"],c:2,cat:"📚 Geschichte"},
+  {q:"Was ist 7 × 8?",a:["54","56","58","60"],c:1,cat:"🔢 Mathe"},
+  {q:"Welcher Planet ist der größte?",a:["Saturn","Uranus","Neptun","Jupiter"],c:3,cat:"🪐 Weltraum"},
+  {q:"Was ist die chemische Formel von Wasser?",a:["CO2","H2O","NaCl","O2"],c:1,cat:"🧪 Chemie"},
+  {q:"Wer malte die Mona Lisa?",a:["Michelangelo","Raphael","Da Vinci","Botticelli"],c:2,cat:"🎨 Kunst"},
+  {q:"Was ist die Hauptstadt von Japan?",a:["Osaka","Kyoto","Hiroshima","Tokio"],c:3,cat:"🌍 Geo"},
+  {q:"Welches Tier ist das schnellste Landtier?",a:["Löwe","Gepard","Pferd","Windhund"],c:1,cat:"🐾 Tiere"},
+  {q:"Wer schrieb 'Romeo und Julia'?",a:["Goethe","Shakespeare","Schiller","Dickens"],c:1,cat:"📖 Literatur"},
+  {q:"Was ist 15 × 4?",a:["55","60","65","70"],c:1,cat:"🔢 Mathe"},
+  {q:"Welcher ist der kleinste Kontinent?",a:["Europa","Antarktis","Australien","Südamerika"],c:2,cat:"🌍 Geo"},
+  {q:"Grundfarben des Lichts?",a:["Rot, Gelb, Blau","Rot, Grün, Blau","Cyan, Magenta, Gelb","Grün, Orange, Lila"],c:1,cat:"🔬 Physik"},
+  {q:"Wie viele Knochen hat ein erwachsener Mensch?",a:["186","206","226","246"],c:1,cat:"🦴 Biologie"},
+  {q:"Hauptstadt von Australien?",a:["Sydney","Melbourne","Brisbane","Canberra"],c:3,cat:"🌍 Geo"},
+  {q:"Längster Fluss der Welt?",a:["Amazonas","Nil","Jangtse","Mississippi"],c:1,cat:"🌍 Geo"},
+  {q:"Wer entwickelte die Relativitätstheorie?",a:["Newton","Bohr","Einstein","Planck"],c:2,cat:"🔬 Physik"},
+  {q:"Was ist 12²?",a:["132","144","156","168"],c:1,cat:"🔢 Mathe"},
+  {q:"In welchem Land liegt der Eiffelturm?",a:["Belgien","Schweiz","Italien","Frankreich"],c:3,cat:"🌍 Geo"},
+  {q:"Wie viele Planeten hat unser Sonnensystem?",a:["6","7","8","9"],c:2,cat:"🪐 Weltraum"},
+  {q:"Was ist die Wurzel aus 144?",a:["10","11","12","13"],c:2,cat:"🔢 Mathe"},
+  {q:"Welches Tier legt das größte Ei?",a:["Strauß","Krokodil","Schildkröte","Albatros"],c:0,cat:"🐾 Tiere"},
+  {q:"Wann wurde die Titanic versenkt?",a:["1910","1911","1912","1913"],c:2,cat:"📚 Geschichte"},
+  {q:"Wie viele Strings hat eine Gitarre?",a:["4","5","6","7"],c:2,cat:"🎸 Musik"},
+  {q:"Was ist H2O?",a:["Wasserstoff","Helium","Wasser","Salz"],c:2,cat:"🧪 Chemie"},
+  {q:"Wer schrieb 'Faust'?",a:["Schiller","Goethe","Kafka","Hesse"],c:1,cat:"📖 Literatur"},
+  {q:"Hauptstadt von Brasilien?",a:["Rio","São Paulo","Salvador","Brasília"],c:3,cat:"🌍 Geo"},
+  {q:"Wie viele Seiten hat ein Würfel?",a:["4","5","6","8"],c:2,cat:"🔢 Mathe"},
+  {q:"Welches Instrument hat Tasten, Saiten UND wird geschlagen?",a:["Gitarre","Klavier","Harfe","Orgel"],c:1,cat:"🎸 Musik"},
+  {q:"Wie heißt der größte Ozean?",a:["Atlantik","Indik","Arktis","Pazifik"],c:3,cat:"🌍 Geo"},
+  {q:"Was ist die Hauptstadt von Kanada?",a:["Toronto","Vancouver","Ottawa","Montreal"],c:2,cat:"🌍 Geo"},
+  {q:"Wie viele Farben hat der Regenbogen?",a:["5","6","7","8"],c:2,cat:"🔬 Physik"},
+  {q:"Wer erfand das Telefon?",a:["Edison","Tesla","Bell","Marconi"],c:2,cat:"🔬 Physik"},
+  {q:"Was ist 25% von 200?",a:["25","40","50","75"],c:2,cat:"🔢 Mathe"},
+  {q:"Welches Element ist ein Edelgas?",a:["Sauerstoff","Stickstoff","Argon","Chlor"],c:2,cat:"🧪 Chemie"},
+  {q:"Wie viele Tage hat ein Schaltjahr?",a:["364","365","366","367"],c:2,cat:"📅 Allgemein"},
+  {q:"In welchem Land wurde Mozart geboren?",a:["Deutschland","Österreich","Schweiz","Italien"],c:1,cat:"🎸 Musik"},
+  {q:"Was bedeutet 'CPU'?",a:["Central Power Unit","Central Processing Unit","Computer Processing Unit","Core Processing Unit"],c:1,cat:"💻 Technik"},
+  {q:"Wie viele Bits hat ein Byte?",a:["4","6","8","16"],c:2,cat:"💻 Technik"},
+  {q:"Was ist die schnellste Geschwindigkeit im Universum?",a:["Schall","Licht","Elektronen","Quarks"],c:1,cat:"🔬 Physik"},
+  {q:"Wie heißt die längste Landgrenze der Welt?",a:["USA-Mexiko","Russland-China","USA-Kanada","China-Indien"],c:2,cat:"🌍 Geo"},
+  {q:"Wer war der erste Mensch auf dem Mond?",a:["Buzz Aldrin","Yuri Gagarin","Neil Armstrong","John Glenn"],c:2,cat:"🪐 Weltraum"},
+  {q:"Wie viele Nullen hat eine Million?",a:["5","6","7","8"],c:1,cat:"🔢 Mathe"},
+  {q:"Was ist die Hauptstadt von Spanien?",a:["Barcelona","Sevilla","Valencia","Madrid"],c:3,cat:"🌍 Geo"},
+  {q:"Welches Tier hat das größte Gehirn?",a:["Elefant","Blauwal","Delfin","Mensch"],c:1,cat:"🐾 Tiere"},
+  {q:"Was ist der Aggregatzustand von Wasser bei 0°C?",a:["Fest","Flüssig","Gasförmig","Gemischt"],c:0,cat:"🧪 Chemie"},
+  {q:"Wer schrieb 'Die Verwandlung'?",a:["Goethe","Kafka","Mann","Rilke"],c:1,cat:"📖 Literatur"},
+  {q:"Wie viele Löcher hat ein Standard-Golfplatz?",a:["9","12","18","24"],c:2,cat:"⛳ Sport"},
+  {q:"Welche Farbe entsteht aus Rot und Blau?",a:["Orange","Grün","Lila","Braun"],c:2,cat:"🎨 Kunst"},
+  {q:"Wie heißt das größte Organ des menschlichen Körpers?",a:["Leber","Lunge","Gehirn","Haut"],c:3,cat:"🦴 Biologie"},
+  {q:"Welcher Fluss fließt durch Wien?",a:["Rhein","Donau","Elbe","Oder"],c:1,cat:"🌍 Geo"},
+  {q:"Wer komponierte die 9. Symphonie 'Ode an die Freude'?",a:["Mozart","Bach","Beethoven","Brahms"],c:2,cat:"🎸 Musik"},
+  {q:"Wie nennt man die Lehre von den Lebewesen?",a:["Geologie","Biologie","Physik","Astronomie"],c:1,cat:"🦴 Biologie"},
+  {q:"In welchem Jahr begann der Erste Weltkrieg?",a:["1912","1914","1916","1918"],c:1,cat:"📚 Geschichte"},
+  {q:"Was ist die Ableitung von x²?",a:["x","2x","x²","2"],c:1,cat:"🔢 Mathe"},
+  {q:"Welches Element hat die Ordnungszahl 1?",a:["Helium","Wasserstoff","Lithium","Kohlenstoff"],c:1,cat:"🧪 Chemie"},
+  {q:"Wer schrieb '1984'?",a:["Aldous Huxley","George Orwell","Ray Bradbury","Franz Kafka"],c:1,cat:"📖 Literatur"},
+  {q:"Wie viele Herzkammern hat ein Mensch?",a:["2","3","4","5"],c:2,cat:"🦴 Biologie"},
+  {q:"Welches Land hat die meisten Einwohner?",a:["USA","Indien","China","Indonesien"],c:1,cat:"🌍 Geo"},
+  {q:"Was ist die SI-Einheit der Kraft?",a:["Joule","Watt","Newton","Pascal"],c:2,cat:"🔬 Physik"},
+  {q:"Welcher Maler schuf 'Die Sternennacht'?",a:["Monet","Van Gogh","Picasso","Dalí"],c:1,cat:"🎨 Kunst"},
+  {q:"Wie viele Aminosäuren bilden die Proteine des Menschen?",a:["10","20","25","30"],c:1,cat:"🦴 Biologie"},
+  {q:"In welchem Jahr wurde die EU gegründet (Maastricht-Vertrag)?",a:["1989","1992","1995","1999"],c:1,cat:"📚 Geschichte"},
+  {q:"Was ist 9³?",a:["729","81","648","891"],c:0,cat:"🔢 Mathe"},
+  {q:"Welches Gas macht den größten Anteil der Erdatmosphäre aus?",a:["Sauerstoff","Kohlendioxid","Stickstoff","Argon"],c:2,cat:"🔬 Physik"},
+  {q:"Wer war der erste Bundeskanzler Deutschlands (BRD)?",a:["Willy Brandt","Helmut Kohl","Konrad Adenauer","Ludwig Erhard"],c:2,cat:"📚 Geschichte"},
+  {q:"Welches ist das chemische Symbol für Eisen?",a:["Ir","Fe","Fr","Ei"],c:1,cat:"🧪 Chemie"},
+  {q:"Wie viele Symphonien schrieb Beethoven?",a:["7","8","9","10"],c:2,cat:"🎸 Musik"},
+  {q:"Was ist die Hauptstadt von Neuseeland?",a:["Auckland","Wellington","Christchurch","Hamilton"],c:1,cat:"🌍 Geo"},
+  {q:"Wie nennt man eine Zahl, die nur durch 1 und sich selbst teilbar ist?",a:["Gerade Zahl","Primzahl","Quadratzahl","Bruchzahl"],c:1,cat:"🔢 Mathe"},
+  {q:"Welches Tier ist ein Monotreme (Kloakentier)?",a:["Koala","Schnabeltier","Känguru","Wombat"],c:1,cat:"🐾 Tiere"},
+  {q:"In welchem Jahr landete die erste unbemannte Sonde auf dem Mars?",a:["1971","1976","1981","1989"],c:1,cat:"🪐 Weltraum"},
+  {q:"Was bedeutet 'HTML'?",a:["High Tech Markup Language","HyperText Markup Language","Home Tool Markup Language","Hyperlink Text Markup Language"],c:1,cat:"💻 Technik"},
+  {q:"Wer schrieb die Oper 'Die Zauberflöte'?",a:["Beethoven","Mozart","Wagner","Verdi"],c:1,cat:"🎸 Musik"},
+  {q:"Welches Land grenzt nicht an Deutschland?",a:["Polen","Tschechien","Ungarn","Niederlande"],c:2,cat:"🌍 Geo"},
+  {q:"Was ist log₁₀(1000)?",a:["2","3","10","100"],c:1,cat:"🔢 Mathe"},
+  {q:"Wie heißt die Theorie über die Entstehung des Universums?",a:["Urknalltheorie","Stringtheorie","Relativitätstheorie","Evolutionstheorie"],c:0,cat:"🪐 Weltraum"},
+  {q:"Welcher Schriftsteller schuf Sherlock Holmes?",a:["Agatha Christie","Arthur Conan Doyle","Edgar Allan Poe","Charles Dickens"],c:1,cat:"📖 Literatur"},
+  {q:"Wie viele Knochen hat ein Hai-Skelett?",a:["0","100","206","300"],c:0,cat:"🐾 Tiere"},
+  {q:"Welche Dynastie regierte China am längsten?",a:["Ming","Qing","Han","Zhou"],c:3,cat:"📚 Geschichte"},
+  {q:"Was ist die Wurzel aus 0,25?",a:["0,05","0,5","2,5","5"],c:1,cat:"🔢 Mathe"},
+  {q:"Welches Element ist bei Raumtemperatur flüssig (Metall)?",a:["Natrium","Quecksilber","Blei","Zink"],c:1,cat:"🧪 Chemie"},
+  {q:"Wer malte die Decke der Sixtinischen Kapelle?",a:["Raphael","Da Vinci","Michelangelo","Donatello"],c:2,cat:"🎨 Kunst"},
+  {q:"Wie heißt der Prozess, bei dem Pflanzen Licht in Energie umwandeln?",a:["Atmung","Photosynthese","Osmose","Gärung"],c:1,cat:"🦴 Biologie"},
+  {q:"Welches Land war nie Teil des britischen Empires?",a:["Indien","Kanada","Brasilien","Australien"],c:2,cat:"📚 Geschichte"},
+  {q:"Was ist 144 ÷ 12?",a:["10","11","12","13"],c:2,cat:"🔢 Mathe"},
+  {q:"Welcher Planet hat die meisten Monde?",a:["Jupiter","Saturn","Uranus","Neptun"],c:1,cat:"🪐 Weltraum"},
+  {q:"Wer formulierte die Vererbungsgesetze?",a:["Darwin","Mendel","Linné","Pasteur"],c:1,cat:"🦴 Biologie"},
+  {q:"In welcher Stadt wurde der Friedensvertrag von Versailles unterschrieben?",a:["Berlin","Paris","Versailles","London"],c:2,cat:"📚 Geschichte"},
+  {q:"Was ist die chemische Bezeichnung für Kochsalz?",a:["KCl","NaCl","CaCO3","NaOH"],c:1,cat:"🧪 Chemie"},
+  {q:"Welches Instrument hat normalerweise 88 Tasten?",a:["Orgel","Akkordeon","Klavier","Cembalo"],c:2,cat:"🎸 Musik"},
+  {q:"Wie viele Zeitzonen hat Russland?",a:["7","9","11","13"],c:2,cat:"🌍 Geo"},
+  {q:"Was ist der Realteil von 3+4i?",a:["3","4","5","7"],c:0,cat:"🔢 Mathe"},
+  {q:"Welcher Wissenschaftler stellte die Unschärferelation auf?",a:["Einstein","Bohr","Heisenberg","Schrödinger"],c:2,cat:"🔬 Physik"},
+  {q:"Wer schrieb 'Der Process'?",a:["Thomas Mann","Franz Kafka","Hermann Hesse","Stefan Zweig"],c:1,cat:"📖 Literatur"},
+  {q:"Welches Tier kann seine Farbe am schnellsten ändern?",a:["Chamäleon","Tintenfisch","Frosch","Gecko"],c:1,cat:"🐾 Tiere"},
+  {q:"Wie viele Bücher hat die Bibel insgesamt (kath. Kanon)?",a:["66","73","78","81"],c:1,cat:"📅 Allgemein"},
+  {q:"Was ist die Hauptstadt der Mongolei?",a:["Astana","Ulaanbaatar","Bishkek","Taschkent"],c:1,cat:"🌍 Geo"},
+  {q:"Welche Säure ist im Magen enthalten?",a:["Schwefelsäure","Salzsäure","Essigsäure","Zitronensäure"],c:1,cat:"🧪 Chemie"},
+  {q:"Wer war der römische Gott des Krieges?",a:["Jupiter","Mars","Neptun","Merkur"],c:1,cat:"📚 Geschichte"},
+  {q:"Was ist die Summe der Innenwinkel eines Fünfecks?",a:["360°","450°","540°","720°"],c:2,cat:"🔢 Mathe"},
+  {q:"Welches Land hat die Form eines Stiefels?",a:["Spanien","Griechenland","Italien","Portugal"],c:2,cat:"🌍 Geo"},
+  {q:"Wie nennt man die Angst vor engen Räumen?",a:["Agoraphobie","Klaustrophobie","Akrophobie","Arachnophobie"],c:1,cat:"🦴 Biologie"},
+  {q:"Welcher Komponist war taub, als er seine 9. Symphonie schrieb?",a:["Mozart","Beethoven","Chopin","Liszt"],c:1,cat:"🎸 Musik"},
+  {q:"Was ist 2 hoch 10?",a:["100","512","1024","2048"],c:2,cat:"🔢 Mathe"},
+  {q:"Welches Element wird für Atombomben mit U-235 verwendet?",a:["Plutonium","Uran","Radium","Polonium"],c:1,cat:"🔬 Physik"},
+  {q:"In welchem Land steht der Tempel Angkor Wat?",a:["Thailand","Vietnam","Kambodscha","Laos"],c:2,cat:"🌍 Geo"},
+  {q:"Wer schrieb 'Krieg und Frieden'?",a:["Dostojewski","Tolstoi","Puschkin","Tschechow"],c:1,cat:"📖 Literatur"},
+  {q:"Wie viele Chromosomenpaare hat ein Mensch?",a:["21","23","24","46"],c:1,cat:"🦴 Biologie"},
+];
+
+let numPlayers = 3, totalRounds = 10;
+document.querySelectorAll('#p-row .sel-btn').forEach(b => { b.addEventListener('click', () => { document.querySelectorAll('#p-row .sel-btn').forEach(x => x.classList.remove('selected')); b.classList.add('selected'); numPlayers = parseInt(b.dataset.p); }); });
+document.querySelectorAll('#r-row .sel-btn').forEach(b => { b.addEventListener('click', () => { document.querySelectorAll('#r-row .sel-btn').forEach(x => x.classList.remove('selected')); b.classList.add('selected'); totalRounds = parseInt(b.dataset.r); }); });
+
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('start-btn');
+const scoreboardEl = document.getElementById('scoreboard');
+const progressBar = document.getElementById('progress-bar');
+const turnInfo = document.getElementById('turn-info');
+const qCat = document.getElementById('q-cat');
+const qText = document.getElementById('q-text');
+const qNum = document.getElementById('q-num');
+const answersEl = document.getElementById('answers');
+const resultArea = document.getElementById('result-area');
+const TIME_PER_Q = 15;
+
+let scores, currentPlayer, questionIdx, round, questions, timeLeft, timerInterval, answered;
+
+function shuffle(a) { for (let i = a.length-1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+function buildScoreboard() {
+  scoreboardEl.innerHTML = '';
+  for (let i = 0; i < numPlayers; i++) {
+    const d = document.createElement('div');
+    d.className = 'p-card' + (i === currentPlayer ? ' active' : '');
+    d.style.color = PLAYER_COLORS[i];
+    d.innerHTML = `<div class="p-name">${PLAYER_NAMES[i]}</div><div class="p-score" id="pscore-${i}">0</div>`;
+    scoreboardEl.appendChild(d);
+  }
+}
+
+function updateScoreboard() {
+  for (let i = 0; i < numPlayers; i++) {
+    scoreboardEl.children[i].classList.toggle('active', i === currentPlayer);
+    document.getElementById('pscore-' + i).textContent = scores[i];
+  }
+}
+
+function init() {
+  scores = Array(numPlayers).fill(0);
+  currentPlayer = 0; round = 0; questionIdx = 0;
+  questions = shuffle([...QUESTIONS]).slice(0, Math.min(totalRounds * numPlayers, QUESTIONS.length));
+  buildScoreboard();
+  nextQuestion();
+}
+
+function nextQuestion() {
+  if (round >= totalRounds) { endGame(); return; }
+  const q = questions[questionIdx % questions.length];
+  answered = false; timeLeft = TIME_PER_Q;
+  turnInfo.style.color = PLAYER_COLORS[currentPlayer];
+  turnInfo.textContent = `${PLAYER_NAMES[currentPlayer]} ist dran`;
+  qCat.textContent = q.cat;
+  qText.textContent = q.q;
+  qNum.textContent = `Frage ${round + 1} / ${totalRounds}`;
+  answersEl.innerHTML = '';
+  q.a.forEach((ans, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'ans-btn'; btn.textContent = ans;
+    btn.addEventListener('click', () => answer(i, q.c, btn));
+    answersEl.appendChild(btn);
+  });
+  startTimer();
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  progressBar.style.transition = 'none'; progressBar.style.width = '100%';
+  requestAnimationFrame(() => {
+    progressBar.style.transition = `width ${TIME_PER_Q}s linear`;
+    progressBar.style.width = '0%';
+  });
+  timerInterval = setInterval(() => { timeLeft--; if (timeLeft <= 0) { clearInterval(timerInterval); timeOut(); } }, 1000);
+}
+
+function answer(i, correct, btn) {
+  if (answered) return; answered = true; clearInterval(timerInterval);
+  answersEl.querySelectorAll('.ans-btn')[correct].classList.add('reveal');
+  if (i === correct) {
+    btn.classList.add('correct');
+    const bonus = Math.max(0, Math.floor(timeLeft / 3));
+    scores[currentPlayer] += 10 + bonus;
+    document.getElementById('pscore-' + currentPlayer).textContent = scores[currentPlayer];
+    turnInfo.textContent = `✅ +${10 + bonus} Punkte!`;
+  } else {
+    btn.classList.add('wrong');
+    turnInfo.textContent = '❌ Falsch!';
+  }
+  setTimeout(advance, 1300);
+}
+
+function timeOut() {
+  if (answered) return; answered = true;
+  answersEl.querySelectorAll('.ans-btn')[questions[questionIdx % questions.length].c].classList.add('reveal');
+  turnInfo.textContent = '⏰ Zeit abgelaufen!';
+  setTimeout(advance, 1300);
+}
+
+function advance() {
+  round++; questionIdx++;
+  currentPlayer = (currentPlayer + 1) % numPlayers;
+  updateScoreboard();
+  if (round >= totalRounds) endGame(); else nextQuestion();
+}
+
+function endGame() {
+  clearInterval(timerInterval);
+  const sorted = [...scores.map((s,i) => ({i,s}))].sort((a,b) => b.s - a.s);
+  resultArea.style.display = 'flex';
+  resultArea.innerHTML = sorted.map((p, rank) => `
+    <div class="result-row" style="border-left:3px solid ${PLAYER_COLORS[p.i]}">
+      <span>${['🏆','🥈','🥉','  '][rank]} <span style="color:${PLAYER_COLORS[p.i]}">${PLAYER_NAMES[p.i]}</span></span>
+      <span style="color:${PLAYER_COLORS[p.i]}">${p.s} Punkte</span>
+    </div>`).join('');
+  overlay.classList.remove('hidden');
+  startBtn.textContent = 'NOCHMAL';
+}
+
+startBtn.addEventListener('click', () => {
+  overlay.classList.add('hidden');
+  resultArea.style.display = 'none';
+  init();
+});
+</script>
+</body>
+</html>
